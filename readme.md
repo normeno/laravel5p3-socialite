@@ -207,6 +207,5 @@ Lo reemplazamos por esto:
 
 Este tutorial no es lo más optimizado para manejar los usuarios, está hecho de esta forma para poder entenderlo fácilmente.
 
-Puedes encontrar más tutoriales en [Yantb](https://yantb.com)
-
-También puedes encontrar el demo aquí
+- [Demo](https://github.com/normeno/laravel5p3-socialite).
+- [Repositorio](https://github.com/laravel/socialite).
