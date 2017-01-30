@@ -1,40 +1,212 @@
-<p align="center"><img src="https://laravel.com/assets/img/components/logo-laravel.svg"></p>
+#Login con redes sociales
 
-<p align="center">
-<a href="https://travis-ci.org/laravel/framework"><img src="https://travis-ci.org/laravel/framework.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/d/total.svg" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/v/stable.svg" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/license.svg" alt="License"></a>
-</p>
+Laravel nos permite trabajar el login con redes sociales de forma muy simple, esto se logra a través de Socialite.
 
-## About Laravel
+Socialite ofrece autenticación OAuth con Facebook, Twitter, Google, LinkedIn, GitHub y Bitbucket.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable, creative experience to be truly fulfilling. Laravel attempts to take the pain out of development by easing common tasks used in the majority of web projects, such as:
+Puedes ver más información de Socialite aquí:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- [Documentación Oficial](https://laravel.com/docs/5.0/authentication#social-authentication).
+- [Github](https://github.com/laravel/socialite).
 
-Laravel is accessible, yet powerful, providing tools needed for large, robust applications. A superb combination of simplicity, elegance, and innovation give you tools you need to build any application with which you are tasked.
+Antes de meternos de lleno en Laravel, debemos crear las apps necesarias de cada red social a utilizar, sin embargo, en este tutorial no veremos ese punto, asumiremos que ya tenemos todo lo necesario. Esto es debido a que existe mucha información sobre esto.
 
-## Learning Laravel
+Obviamente, lo primero es crear un proyecto
 
-Laravel has the most extensive and thorough documentation and video tutorial library of any modern web application framework. The [Laravel documentation](https://laravel.com/docs) is thorough, complete, and makes it a breeze to get started learning the framework.
+```shell
+laravel new project
+```
 
-If you're not in the mood to read, [Laracasts](https://laracasts.com) contains over 900 video tutorials on a range of topics including Laravel, modern PHP, unit testing, JavaScript, and more. Boost the skill level of yourself and your entire team by digging into our comprehensive video library.
+Ahora, ingresamos al repositorio y agregamos el package de socialite
 
-## Contributing
+```shell
+cd <proyecto>
+composer require laravel/socialite
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](http://laravel.com/docs/contributions).
+Vamos a **/config/app.php** y buscamos el arreglo de providers, aquí agregamos:
 
-## Security Vulnerabilities
+```php
+Laravel\Socialite\SocialiteServiceProvider::class,
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell at taylor@laravel.com. All security vulnerabilities will be promptly addressed.
+```php
+'Socialite' => Laravel\Socialite\Facades\Socialite::class,
+```
 
-## License
+Antes de seguir configurando Socialite, lo que haremos es modificar la migración de usuario, esto es con el único fin de guardar el id de la red social y que el email no sea único
 
-The Laravel framework is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT).
+```php
+public function up()
+{
+    Schema::create('users', function (Blueprint $table) {
+        $table->increments('id');
+        $table->string('name');
+        $table->string('email');
+        $table->string('password');
+        $table->string('social_id');
+        $table->rememberToken();
+        $table->timestamps();
+    });
+}
+```
+
+Luego, vamos a nuestro archivos de entorno (**.env**) y configuramos las variables de base de datos y creamos las sociales a utilizar
+
+```
+DB_CONNECTION=sqlite
+ 
+FB_CLIENT_ID=<client_id>
+FB_SECRET_ID=<secret_id>
+FB_REDIRECT=http://localhost:8000/auth/facebook/callback
+ 
+GP_CLIENT_ID=<client_id>
+GP_SECRET_ID=<secret_id>
+GP_REDIRECT=http://localhost:8000/auth/google/callback
+```
+
+En este ejemplo utilizamos sqlite, pero obviamente podemos trabajar con MySQL u otro motor.
+
+Ejecutamos migración
+
+```shell
+php artisan migrate
+```
+
+Ahora tenemos que ir a **config/services.php** para agregar los valores
+
+```php
+'facebook' => [
+    'client_id' => env('FB_CLIENT_ID'),
+    'client_secret' => env('FB_SECRET_ID'),
+    'redirect' => env('FB_REDIRECT'),
+],
+ 
+'google' => [
+    'client_id' => env('GP_CLIENT_ID'),
+    'client_secret' => env('GP_SECRET_ID'),
+    'redirect' => env('GP_REDIRECT'),
+],
+```
+
+Luego, vamos al modelo **User.php** y modificamos fillable para poder guardar el social_id
+
+```php
+protected $fillable = [
+    'name', 'email', 'password', 'social_id'
+];
+```
+
+Creamos el controlador necesario para manejar el login a través de las redes sociales
+
+
+```shell
+php artisan make:controller SocialController
+```
+
+Este controlador posee la siguiente lógica
+
+```php
+<?php
+ 
+namespace App\Http\Controllers;
+ 
+use App\User;
+use Illuminate\Support\Facades\Auth;
+use Laravel\Socialite\Facades\Socialite;
+ 
+class SocialController extends Controller
+{
+    public function redirect($provider)
+    {
+        return Socialite::driver($provider)->redirect();
+    }
+ 
+    public function callback($provider)
+    {
+        // Obtener información de usuario desde provider
+        $userProvider = Socialite::driver($provider)->user();
+ 
+        //Validar que el usuario exista
+        $user = User::where([
+            ['email', '=', $userProvider->email],
+            ['social_id', '=', $userProvider->id]
+        ])->first();
+ 
+        if (!$user) {
+ 
+            $insert = User::create([
+                'name' => $userProvider->name,
+                'email' => $userProvider->email,
+                'password' => bcrypt(
+                    substr(
+                        str_shuffle(
+                            str_repeat("0123456789abcdefghijklmnopqrstuvwxyz", 5)
+                        ), 0, 5)
+                ),
+                'social_id' => $userProvider->id
+            ]);
+ 
+            $user = $insert;
+        }
+ 
+        // Hacer login de usuario
+        Auth::login($user);
+ 
+        return redirect('/');
+    }
+ 
+    public function sign_out()
+    {
+        Auth::logout();
+        return redirect('/');
+    }
+}
+```
+
+Configurado el controlador, debemos asignar las rutas, para esto vamos a /routes/web.php y agregamos:
+
+```php
+Route::get('/auth/{provider}/redirect', [
+    'as' => 'social_redirect',
+    'uses' => 'SocialController@redirect'
+]);
+ 
+Route::get('/auth/{provider}/callback', [
+    'as' => 'social_handle',
+    'uses' => 'SocialController@callback'
+]);
+ 
+Route::get('/auth/sign_out', [
+    'as' => 'sign_out',
+    'uses' => 'SocialController@sign_out'
+]);
+```
+
+Para hacer más simple la edición de la vista, utilizaremos la que viene de forma predeterminada (**welcome.blade.php**) y buscamos el div links
+
+```html
+<div class="links">
+    <a href="https://laravel.com/docs">Documentation</a>
+    <a href="https://laracasts.com">Laracasts</a>
+    <a href="https://laravel-news.com">News</a>
+    <a href="https://forge.laravel.com">Forge</a>
+    <a href="https://github.com/laravel/laravel">GitHub</a>
+</div>
+```
+
+Lo reemplazamos por esto:
+
+```html
+<div class="links">
+    <a href="{{ route('social_redirect', ['provider' => 'facebook']) }}">Login Facebook</a>
+    <a href="{{ route('social_redirect', ['provider' => 'google']) }}">Login Google</a>
+    <a href="{{ route('sign_out') }}">Salir</a>
+</div>
+```
+
+Este tutorial no es lo más optimizado para manejar los usuarios, está hecho de esta forma para poder entenderlo fácilmente.
+
+Puedes encontrar más tutoriales en [Yantb](https://yantb.com)
+
+También puedes encontrar el demo aquí

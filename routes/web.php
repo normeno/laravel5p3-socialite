@@ -14,3 +14,18 @@
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/auth/{provider}/redirect', [
+    'as' => 'social_redirect',
+    'uses' => 'SocialController@redirect'
+]);
+
+Route::get('/auth/{provider}/callback', [
+    'as' => 'social_handle',
+    'uses' => 'SocialController@callback'
+]);
+
+Route::get('/auth/sign_out', [
+    'as' => 'sign_out',
+    'uses' => 'SocialController@sign_out'
+]);
