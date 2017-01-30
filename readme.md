@@ -207,5 +207,5 @@ Lo reemplazamos por esto:
 
 Este tutorial no es lo más optimizado para manejar los usuarios, está hecho de esta forma para poder entenderlo fácilmente.
 
-- [Demo](https://github.com/normeno/laravel5p3-socialite).
-- [Repositorio](https://github.com/laravel/socialite).
+- [Demo](http://fierce-castle-88699.herokuapp.com/).
+- [Repositorio](https://github.com/normeno/laravel5p3-socialite).
